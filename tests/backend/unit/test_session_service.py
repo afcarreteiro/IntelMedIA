@@ -11,6 +11,25 @@ from app.services.sessions import SessionService
 from sqlalchemy.schema import CreateTable
 
 
+def test_delete_session_runs_cleanup_before_removing_in_memory_session() -> None:
+    class InspectingCleanupService:
+        def __init__(self, sessions: dict[str, SessionCreateResult]) -> None:
+            self._sessions = sessions
+
+        def delete_session(self, session_id: str) -> dict[str, str]:
+            assert session_id in self._sessions
+            return {"deleted_session_id": session_id}
+
+    service = SessionService(cleanup_service=InspectingCleanupService({}))
+    created = service.create_session()
+    service.cleanup_service = InspectingCleanupService(service._sessions)
+
+    deleted = service.delete_session(created.session_id)
+
+    assert deleted == {"deleted_session_id": created.session_id}
+    assert created.session_id not in service._sessions
+
+
 def test_delete_session_returns_deleted_session_id() -> None:
     service = SessionService()
     created = service.create_session()

@@ -39,5 +39,6 @@ class SessionService:
         if created is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
 
+        deleted = self.cleanup_service.delete_session(session_id)
         self._sessions.pop(session_id)
-        return self.cleanup_service.delete_session(session_id)
+        return deleted
