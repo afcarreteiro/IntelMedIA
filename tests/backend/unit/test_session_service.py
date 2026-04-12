@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.models.session_metadata import SessionMetadata
 from app.schemas.sessions import SessionCreateResult, SessionState
-from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.schema import CreateTable
 
 
 def test_session_create_result_defaults_to_idle_state() -> None:
@@ -26,8 +26,9 @@ def test_backend_pytest_config_supports_running_from_backend_directory() -> None
     assert pytest_config["testpaths"] == ["../tests"]
 
 
-def test_session_metadata_status_column_uses_session_state_enum() -> None:
-    status_column = SessionMetadata.__table__.c.status
+def test_session_metadata_status_column_emits_database_check_constraint() -> None:
+    ddl = str(CreateTable(SessionMetadata.__table__).compile())
 
-    assert isinstance(status_column.type, SqlEnum)
-    assert list(status_column.type.enums) == [state.value for state in SessionState]
+    assert 'CHECK (status IN (' in ddl
+    for state in SessionState:
+        assert f"'{state.value}'" in ddl
