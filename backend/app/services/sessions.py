@@ -19,11 +19,8 @@ class SessionService:
         self._sessions[session_id] = created
         return created
 
-    def get_session(self, session_id: str) -> SessionCreateResult | None:
-        return self._sessions.get(session_id)
-
     def close_session(self, session_id: str) -> SessionCreateResult:
-        created = self.get_session(session_id)
+        created = self._sessions.get(session_id)
         if created is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
 
@@ -34,6 +31,3 @@ class SessionService:
         )
         self._sessions[session_id] = closed
         return closed
-
-
-session_service = SessionService()
