@@ -15,3 +15,8 @@ def create_session() -> SessionCreateResult:
 @router.post("/{session_id}/close", response_model=SessionCreateResult)
 def close_session(session_id: str) -> SessionCreateResult:
     return service.close_session(session_id)
+
+
+@router.delete("/{session_id}")
+def delete_session(session_id: str) -> dict[str, str]:
+    return service.delete_session(session_id)

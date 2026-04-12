@@ -11,6 +11,15 @@ from app.services.sessions import SessionService
 from sqlalchemy.schema import CreateTable
 
 
+def test_delete_session_returns_deleted_session_id() -> None:
+    service = SessionService()
+    created = service.create_session()
+
+    deleted = service.delete_session(created.session_id)
+
+    assert deleted == {"deleted_session_id": created.session_id}
+
+
 def test_create_session_starts_idle_and_close_transitions_to_closed() -> None:
     service = SessionService()
 
