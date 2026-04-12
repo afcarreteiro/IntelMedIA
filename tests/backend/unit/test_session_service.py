@@ -4,7 +4,18 @@ from pathlib import Path
 
 from app.models.session_metadata import SessionMetadata
 from app.schemas.sessions import SessionCreateResult, SessionState
+from app.services.sessions import SessionService
 from sqlalchemy.schema import CreateTable
+
+
+def test_create_session_starts_idle_and_close_transitions_to_closed() -> None:
+    service = SessionService()
+
+    created = service.create_session()
+    closed = service.close_session(created.session_id)
+
+    assert created.status is SessionState.IDLE
+    assert closed.status is SessionState.CLOSED
 
 
 def test_session_create_result_defaults_to_idle_state() -> None:
