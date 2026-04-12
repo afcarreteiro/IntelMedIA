@@ -1,3 +1,5 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -28,10 +30,20 @@ def test_session_lifecycle_endpoints_create_idle_session_and_close_it() -> None:
     assert created_body["status"] == "IDLE"
     assert created_body["created_at"]
 
+    time.sleep(0.02)
     close_response = client.post(f"/sessions/{created_body['session_id']}/close")
 
     assert close_response.status_code == 200
     closed_body = close_response.json()
     assert closed_body["session_id"] == created_body["session_id"]
     assert closed_body["status"] == "CLOSED"
-    assert closed_body["created_at"]
+    assert closed_body["created_at"] == created_body["created_at"]
+
+
+def test_close_session_endpoint_returns_404_for_unknown_session_id() -> None:
+    client = TestClient(app)
+
+    response = client.post("/sessions/missing-session/close")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "session not found"}
