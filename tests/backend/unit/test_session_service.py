@@ -1,6 +1,10 @@
+import tomllib
 from datetime import UTC, datetime
+from pathlib import Path
 
+from app.models.session_metadata import SessionMetadata
 from app.schemas.sessions import SessionCreateResult, SessionState
+from sqlalchemy import Enum as SqlEnum
 
 
 def test_session_create_result_defaults_to_idle_state() -> None:
@@ -11,3 +15,19 @@ def test_session_create_result_defaults_to_idle_state() -> None:
     )
 
     assert created.status is SessionState.IDLE
+
+
+def test_backend_pytest_config_supports_running_from_backend_directory() -> None:
+    pyproject_path = Path(__file__).resolve().parents[3] / "backend" / "pyproject.toml"
+    config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    pytest_config = config["tool"]["pytest"]["ini_options"]
+
+    assert pytest_config["pythonpath"] == ["."]
+    assert pytest_config["testpaths"] == ["../tests"]
+
+
+def test_session_metadata_status_column_uses_session_state_enum() -> None:
+    status_column = SessionMetadata.__table__.c.status
+
+    assert isinstance(status_column.type, SqlEnum)
+    assert list(status_column.type.enums) == [state.value for state in SessionState]
