@@ -20,6 +20,16 @@ def test_delete_session_returns_deleted_session_id() -> None:
     assert deleted == {"deleted_session_id": created.session_id}
 
 
+def test_delete_session_rejects_unknown_session_id() -> None:
+    service = SessionService()
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.delete_session("missing-session")
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "session not found"
+
+
 def test_create_session_starts_idle_and_close_transitions_to_closed() -> None:
     service = SessionService()
 

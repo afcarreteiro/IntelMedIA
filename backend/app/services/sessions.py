@@ -35,5 +35,9 @@ class SessionService:
         return closed
 
     def delete_session(self, session_id: str) -> dict[str, str]:
-        self._sessions.pop(session_id, None)
+        created = self._sessions.get(session_id)
+        if created is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
+
+        self._sessions.pop(session_id)
         return self.cleanup_service.delete_session(session_id)
