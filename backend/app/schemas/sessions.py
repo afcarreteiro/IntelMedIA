@@ -22,7 +22,7 @@ class SessionCreateResult(BaseModel):
 class TranslationSegment(BaseModel):
     segment_id: str
     source_text: str
-    translated_text: str
+    translated_text: str | None = None
     is_final: bool
 
 
