@@ -47,6 +47,9 @@ export default function App() {
   const [working, setWorking] = useState(false);
   const [snapshot, setSnapshot] = useState(() => sessionStore.snapshot());
   const [submitLogin] = useState(() => createLoginSubmission({ client: apiClient, store: sessionStore }));
+  const isAuthenticated = Boolean(snapshot.token);
+  const hasSession = Boolean(snapshot.sessionId);
+  const hasActiveSession = hasSession && snapshot.status === "ACTIVE";
 
   function syncSnapshot() {
     setSnapshot(sessionStore.snapshot());
@@ -68,7 +71,7 @@ export default function App() {
   }
 
   async function handleCreateSession() {
-    if (working) {
+    if (working || !isAuthenticated || snapshot.status === "ACTIVE") {
       return;
     }
 
@@ -92,7 +95,7 @@ export default function App() {
   }
 
   async function handleCloseSession() {
-    if (working || !snapshot.sessionId) {
+    if (working || !isAuthenticated || !hasActiveSession) {
       return;
     }
 
@@ -108,7 +111,7 @@ export default function App() {
   }
 
   async function handleDeleteSession() {
-    if (working || !snapshot.sessionId) {
+    if (working || !isAuthenticated || !hasSession) {
       return;
     }
 
@@ -124,7 +127,7 @@ export default function App() {
   }
 
   async function handleExportSoap() {
-    if (working || !snapshot.sessionId) {
+    if (working || !isAuthenticated || !hasSession) {
       return;
     }
 
@@ -143,7 +146,9 @@ export default function App() {
     <main>
       <LoginForm onSubmit={handleSubmit} disabled={submitting || working} />
       <SessionControls
-        hasSession={Boolean(snapshot.sessionId)}
+        canCreate={isAuthenticated && snapshot.status !== "ACTIVE"}
+        canClose={isAuthenticated && hasActiveSession}
+        canDelete={isAuthenticated && hasSession}
         disabled={working}
         onCreateSession={handleCreateSession}
         onCloseSession={handleCloseSession}
@@ -151,7 +156,7 @@ export default function App() {
       />
       <StatusBanner status={snapshot.status} />
       <TranscriptPane segments={snapshot.segments} />
-      <SoapPane disabled={working || !snapshot.sessionId} soap={snapshot.soap} onExport={handleExportSoap} />
+      <SoapPane disabled={working || !isAuthenticated || !hasSession} soap={snapshot.soap} onExport={handleExportSoap} />
     </main>
   );
 }

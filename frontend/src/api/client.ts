@@ -21,11 +21,21 @@ export type ApiClient = {
 };
 
 export function createApiClient(baseUrl = ""): ApiClient {
-  void baseUrl;
-
   return {
     async login(username: string, password: string) {
-      return Promise.resolve({ access_token: `${username}-${password}-token`, token_type: "bearer" });
+      const response = await fetch(`${baseUrl}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Login failed");
+      }
+
+      return response.json() as Promise<LoginResponse>;
     },
     async createSession() {
       return Promise.resolve({ session_id: "session-local", status: "ACTIVE" });
