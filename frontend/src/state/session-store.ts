@@ -17,14 +17,14 @@ export function createSessionStore() {
     setToken(token: string) {
       snapshot.token = token;
     },
-    startSession(sessionId: string) {
+    startSession(sessionId: string, status: "IDLE" | "ACTIVE" | "CLOSED") {
       snapshot.sessionId = sessionId;
-      snapshot.status = "ACTIVE";
+      snapshot.status = status;
       snapshot.soap = "";
       snapshot.segments = [];
     },
-    closeSession() {
-      snapshot.status = "CLOSED";
+    closeSession(status: "IDLE" | "ACTIVE" | "CLOSED") {
+      snapshot.status = status;
     },
     deleteSession() {
       snapshot.sessionId = "";

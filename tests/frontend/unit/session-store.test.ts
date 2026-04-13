@@ -11,4 +11,14 @@ describe("session store", () => {
     expect(store.snapshot().token).toBe("token-123");
     expect(window.localStorage.length).toBe(0);
   });
+
+  it("keeps the backend-provided lifecycle state", () => {
+    const store = createSessionStore();
+
+    store.startSession("session-1", "IDLE");
+    expect(store.snapshot().status).toBe("IDLE");
+
+    store.closeSession("CLOSED");
+    expect(store.snapshot().status).toBe("CLOSED");
+  });
 });

@@ -10,6 +10,7 @@ export default defineConfig({
     },
     proxy: {
       "/auth": "http://localhost:8000",
+      "/sessions": "http://localhost:8000",
     },
   },
   test: {

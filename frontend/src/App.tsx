@@ -49,7 +49,7 @@ export default function App() {
   const [submitLogin] = useState(() => createLoginSubmission({ client: apiClient, store: sessionStore }));
   const isAuthenticated = Boolean(snapshot.token);
   const hasSession = Boolean(snapshot.sessionId);
-  const hasActiveSession = hasSession && snapshot.status === "ACTIVE";
+  const canCloseSession = hasSession && snapshot.status !== "CLOSED";
 
   function syncSnapshot() {
     setSnapshot(sessionStore.snapshot());
@@ -71,7 +71,7 @@ export default function App() {
   }
 
   async function handleCreateSession() {
-    if (working || !isAuthenticated || snapshot.status === "ACTIVE") {
+    if (working || !isAuthenticated || hasSession) {
       return;
     }
 
@@ -79,15 +79,7 @@ export default function App() {
 
     try {
       const session = await apiClient.createSession();
-      sessionStore.startSession(session.session_id);
-      sessionStore.replaceSegments([
-        {
-          segmentId: "draft-1",
-          sourceText: "Draft transcript",
-          translatedText: "",
-          isFinal: false,
-        },
-      ]);
+      sessionStore.startSession(session.session_id, session.status);
       syncSnapshot();
     } finally {
       setWorking(false);
@@ -95,15 +87,15 @@ export default function App() {
   }
 
   async function handleCloseSession() {
-    if (working || !isAuthenticated || !hasActiveSession) {
+    if (working || !isAuthenticated || !canCloseSession) {
       return;
     }
 
     setWorking(true);
 
     try {
-      await apiClient.closeSession(snapshot.sessionId);
-      sessionStore.closeSession();
+      const closedSession = await apiClient.closeSession(snapshot.sessionId);
+      sessionStore.closeSession(closedSession.status);
       syncSnapshot();
     } finally {
       setWorking(false);
@@ -136,8 +128,14 @@ export default function App() {
     try {
       const result = await apiClient.fetchSoap(snapshot.sessionId);
       sessionStore.setSoap(result.soap);
-      syncSnapshot();
+    } catch (error) {
+      if (error instanceof Error && error.message === "SOAP endpoint unavailable") {
+        sessionStore.setSoap("SOAP export unavailable: backend endpoint not implemented.");
+      } else {
+        sessionStore.setSoap("SOAP export failed.");
+      }
     } finally {
+      syncSnapshot();
       setWorking(false);
     }
   }
@@ -146,8 +144,8 @@ export default function App() {
     <main>
       <LoginForm onSubmit={handleSubmit} disabled={submitting || working} />
       <SessionControls
-        canCreate={isAuthenticated && snapshot.status !== "ACTIVE"}
-        canClose={isAuthenticated && hasActiveSession}
+        canCreate={isAuthenticated && !hasSession}
+        canClose={isAuthenticated && canCloseSession}
         canDelete={isAuthenticated && hasSession}
         disabled={working}
         onCreateSession={handleCreateSession}

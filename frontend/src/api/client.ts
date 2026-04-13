@@ -3,9 +3,11 @@ type LoginResponse = {
   token_type: string;
 };
 
-type CreateSessionResponse = {
+export type SessionStatus = "IDLE" | "ACTIVE" | "CLOSED";
+
+type SessionResponse = {
   session_id: string;
-  status: "ACTIVE";
+  status: SessionStatus;
 };
 
 type SoapResponse = {
@@ -14,8 +16,8 @@ type SoapResponse = {
 
 export type ApiClient = {
   login(username: string, password: string): Promise<LoginResponse>;
-  createSession(): Promise<CreateSessionResponse>;
-  closeSession(sessionId: string): Promise<void>;
+  createSession(): Promise<SessionResponse>;
+  closeSession(sessionId: string): Promise<SessionResponse>;
   deleteSession(sessionId: string): Promise<void>;
   fetchSoap(sessionId: string): Promise<SoapResponse>;
 };
@@ -38,18 +40,50 @@ export function createApiClient(baseUrl = ""): ApiClient {
       return response.json() as Promise<LoginResponse>;
     },
     async createSession() {
-      return Promise.resolve({ session_id: "session-local", status: "ACTIVE" });
+      const response = await fetch(`${baseUrl}/sessions`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Create session failed");
+      }
+
+      return response.json() as Promise<SessionResponse>;
     },
     async closeSession(sessionId: string) {
-      void sessionId;
-      return Promise.resolve();
+      const response = await fetch(`${baseUrl}/sessions/${sessionId}/close`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Close session failed");
+      }
+
+      return response.json() as Promise<SessionResponse>;
     },
     async deleteSession(sessionId: string) {
-      void sessionId;
-      return Promise.resolve();
+      const response = await fetch(`${baseUrl}/sessions/${sessionId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Delete session failed");
+      }
     },
     async fetchSoap(sessionId: string) {
-      return Promise.resolve({ soap: `SOAP note for ${sessionId}` });
+      const response = await fetch(`${baseUrl}/sessions/${sessionId}/soap`, {
+        method: "GET",
+      });
+
+      if ([404, 405, 501].includes(response.status)) {
+        throw new Error("SOAP endpoint unavailable");
+      }
+
+      if (!response.ok) {
+        throw new Error("SOAP export failed");
+      }
+
+      return response.json() as Promise<SoapResponse>;
     },
   };
 }
