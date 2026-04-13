@@ -7,7 +7,7 @@ export type ApiClient = {
   login(username: string, password: string): Promise<LoginResponse>;
 };
 
-export function createApiClient(baseUrl = "http://localhost:8000"): ApiClient {
+export function createApiClient(baseUrl = ""): ApiClient {
   return {
     async login(username: string, password: string) {
       const response = await fetch(`${baseUrl}/auth/login`, {

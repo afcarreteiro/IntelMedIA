@@ -8,6 +8,9 @@ export default defineConfig({
     fs: {
       allow: [".."],
     },
+    proxy: {
+      "/auth": "http://localhost:8000",
+    },
   },
   test: {
     environment: "jsdom",
