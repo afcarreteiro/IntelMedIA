@@ -5,6 +5,8 @@ type SessionSnapshot = {
   segments: TranscriptSegment[];
 };
 
+export type SessionStore = ReturnType<typeof createSessionStore>;
+
 export function createSessionStore() {
   const snapshot: SessionSnapshot = { token: "", segments: [] };
 
