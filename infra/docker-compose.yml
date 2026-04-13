@@ -1,0 +1,71 @@
+services:
+  gateway:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+    command: sh -c "pip install --no-cache-dir -e . uvicorn && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      INTELMEDIA_DATABASE_URL: postgresql+psycopg://intelmedia:intelmedia@postgres:5432/intelmedia
+      INTELMEDIA_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - asr-worker
+      - mt-worker
+      - soap-worker
+      - redis
+      - postgres
+
+  asr-worker:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+    command: sh -c "pip install --no-cache-dir -e . && python -m app.workers.asr_worker"
+    environment:
+      INTELMEDIA_DATABASE_URL: postgresql+psycopg://intelmedia:intelmedia@postgres:5432/intelmedia
+      INTELMEDIA_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+
+  mt-worker:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+    command: sh -c "pip install --no-cache-dir -e . && python -m app.workers.mt_worker"
+    environment:
+      INTELMEDIA_DATABASE_URL: postgresql+psycopg://intelmedia:intelmedia@postgres:5432/intelmedia
+      INTELMEDIA_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+
+  soap-worker:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+    command: sh -c "pip install --no-cache-dir -e . && python -m app.workers.soap_worker"
+    environment:
+      INTELMEDIA_DATABASE_URL: postgresql+psycopg://intelmedia:intelmedia@postgres:5432/intelmedia
+      INTELMEDIA_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: intelmedia
+      POSTGRES_USER: intelmedia
+      POSTGRES_PASSWORD: intelmedia
+    ports:
+      - "5432:5432"
