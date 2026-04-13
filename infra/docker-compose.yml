@@ -1,0 +1,32 @@
+services:
+  gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:8080"
+    depends_on:
+      - asr-worker
+      - mt-worker
+      - soap-worker
+
+  asr-worker:
+    image: python:3.12-slim
+
+  mt-worker:
+    image: python:3.12-slim
+
+  soap-worker:
+    image: python:3.12-slim
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: intelmedia
+      POSTGRES_USER: intelmedia
+      POSTGRES_PASSWORD: intelmedia
+    ports:
+      - "5432:5432"
