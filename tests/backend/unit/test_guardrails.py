@@ -61,6 +61,42 @@ def test_guardrail_rejects_whitespace_only_soap_fields() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("subjective", "\n\t"),
+        ("objective", "\r\n"),
+        ("assessment", "   \n"),
+        ("plan", "\t"),
+    ],
+)
+def test_guardrail_rejects_control_character_only_soap_fields(field: str, value: str) -> None:
+    service = GuardrailService()
+    payload = {
+        "subjective": "Patient describes symptoms.",
+        "objective": "Observation pending.",
+        "assessment": "Assessment pending.",
+        "plan": "Plan pending.",
+    }
+    payload[field] = value
+
+    with pytest.raises(ValueError, match="all soap fields are required"):
+        service.validate_soap(SoapSummary(**payload))
+
+
+def test_guardrail_rejects_soap_payload_with_null_field() -> None:
+    service = GuardrailService()
+    invalid_summary = SoapSummary.model_construct(
+        subjective=None,
+        objective="Observation pending.",
+        assessment="Assessment pending.",
+        plan="Plan pending.",
+    )
+
+    with pytest.raises(ValueError, match="all soap fields are required"):
+        service.validate_soap(invalid_summary)
+
+
 def test_asr_worker_returns_segment_without_translated_text() -> None:
     segment = transcribe_audio(segment_id="segment-1", chunk=b"audio")
 

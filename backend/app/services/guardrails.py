@@ -8,13 +8,12 @@ class GuardrailService:
         return segment
 
     def validate_soap(self, summary: SoapSummary) -> SoapSummary:
-        if not all(
-            [
-                summary.subjective.strip(),
-                summary.objective.strip(),
-                summary.assessment.strip(),
-                summary.plan.strip(),
-            ]
-        ):
+        fields = [
+            summary.subjective,
+            summary.objective,
+            summary.assessment,
+            summary.plan,
+        ]
+        if not all(isinstance(field, str) and field.strip() for field in fields):
             raise ValueError("all soap fields are required")
         return summary

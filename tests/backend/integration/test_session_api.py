@@ -15,6 +15,7 @@ def test_login_endpoint_returns_bearer_token_for_known_clinician() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert set(body.keys()) == {"access_token", "token_type"}
     assert body["access_token"]
     assert body["token_type"] == "bearer"
 
@@ -47,3 +48,15 @@ def test_close_session_endpoint_returns_404_for_unknown_session_id() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "session not found"}
+
+
+def test_login_endpoint_rejects_invalid_credentials_without_leaking_inputs() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "clinician", "password": "wrong-password"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "invalid credentials"}

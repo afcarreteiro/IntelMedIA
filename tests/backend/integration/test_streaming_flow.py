@@ -17,3 +17,16 @@ def test_stream_session_queues_one_audio_chunk_and_closes() -> None:
 
     assert response == {"type": "audio_queued", "message_id": "audio-1"}
     assert exc_info.value.code == 1000
+
+
+def test_stream_session_response_does_not_expose_raw_audio_payload() -> None:
+    client = TestClient(app)
+    secret_audio_chunk = b"patient-sensitive-audio"
+
+    with client.websocket_connect("/ws/session-privacy") as websocket:
+        websocket.send_bytes(secret_audio_chunk)
+        response = websocket.receive_json()
+
+    assert response["type"] == "audio_queued"
+    assert "chunk" not in response
+    assert "payload" not in response

@@ -49,6 +49,17 @@ def test_delete_session_rejects_unknown_session_id() -> None:
     assert exc_info.value.detail == "session not found"
 
 
+def test_delete_session_error_message_does_not_leak_requested_session_id() -> None:
+    service = SessionService()
+    missing_session_id = "patient-session-123"
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.delete_session(missing_session_id)
+
+    assert exc_info.value.detail == "session not found"
+    assert missing_session_id not in exc_info.value.detail
+
+
 def test_create_session_starts_idle_and_close_transitions_to_closed() -> None:
     service = SessionService()
 
