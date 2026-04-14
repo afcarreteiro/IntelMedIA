@@ -1,3 +1,4 @@
+import microphoneIcon from '../assets/microphone.svg';
 import { SpeakerRole } from '../types';
 
 interface ComposerProps {
@@ -35,54 +36,69 @@ export function Composer({
 }: ComposerProps) {
   return (
     <section className="composer">
-      <div className="speaker-toggle">
-        <button
-          type="button"
-          className={speaker === 'clinician' ? 'is-active' : ''}
-          onClick={() => onSpeakerChange('clinician')}
-          disabled={disabled}
-        >
-          Clinician speaking
-        </button>
-        <button
-          type="button"
-          className={speaker === 'patient' ? 'is-active' : ''}
-          onClick={() => onSpeakerChange('patient')}
-          disabled={disabled}
-        >
-          Patient speaking
-        </button>
+      <div className="composer-head">
+        <div className="speaker-toggle">
+          <button
+            type="button"
+            className={speaker === 'clinician' ? 'is-active' : ''}
+            onClick={() => onSpeakerChange('clinician')}
+            disabled={disabled}
+          >
+            Clinico
+          </button>
+          <button
+            type="button"
+            className={speaker === 'patient' ? 'is-active' : ''}
+            onClick={() => onSpeakerChange('patient')}
+            disabled={disabled}
+          >
+            Doente
+          </button>
+        </div>
+
+        <div className="flow-pill">Preparado para conversa continua</div>
       </div>
 
       <div className="composer-meta">
         <span>{sourceLanguageLabel}</span>
-        <span>translated to</span>
         <span>{translationLanguageLabel}</span>
       </div>
 
-      <textarea
-        value={text}
-        onChange={(event) => onTextChange(event.target.value)}
-        placeholder="Type the spoken sentence here, or use dictation."
-        disabled={disabled}
-      />
+      <div className="composer-input-row">
+        <button
+          type="button"
+          className={`mic-button ${isListening ? 'mic-button--live' : ''}`}
+          onClick={isListening ? onStopListening : onStartListening}
+          disabled={disabled || !speechSupported}
+          aria-label={isListening ? 'Parar captura de voz' : 'Iniciar captura de voz'}
+          title={isListening ? 'Parar captura de voz' : 'Iniciar captura de voz'}
+        >
+          <img src={microphoneIcon} alt="" className="mic-button__image" />
+          <span className="sr-only">
+            {speechSupported
+              ? (isListening ? 'Microfone ativo' : 'Microfone pronto')
+              : 'Microfone indisponivel'}
+          </span>
+        </button>
 
-      {interimText ? <div className="interim-pill">Listening: {interimText}</div> : null}
+        <textarea
+          value={text}
+          onChange={(event) => onTextChange(event.target.value)}
+          placeholder="Escreva ou dite a frase da consulta."
+          disabled={disabled}
+        />
+      </div>
+
+      {interimText ? <div className="interim-pill">A ouvir: {interimText}</div> : null}
 
       <div className="button-row">
-        {speechSupported ? (
-          <button
-            type="button"
-            className={`button ${isListening ? 'button--danger' : 'button--secondary'}`}
-            onClick={isListening ? onStopListening : onStartListening}
-            disabled={disabled}
-          >
-            {isListening ? 'Stop Dictation' : 'Start Dictation'}
-          </button>
-        ) : null}
-
-        <button type="button" className="button button--primary" onClick={onSend} disabled={disabled || isSubmitting || !text.trim()}>
-          {isSubmitting ? 'Sending...' : 'Translate Utterance'}
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={onSend}
+          disabled={disabled || isSubmitting || !text.trim()}
+        >
+          {isSubmitting ? 'A traduzir...' : 'Enviar traducao'}
         </button>
       </div>
     </section>

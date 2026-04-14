@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.auth import MessageResponse
 from app.schemas.session import (
+    AudioChunkRequest,
+    AudioChunkResponse,
+    AudioFinalizeRequest,
+    AudioFinalizeResponse,
     SessionCloseResponse,
     SessionCreateRequest,
     SessionStatusResponse,
@@ -13,14 +17,16 @@ from app.schemas.session import (
     UtteranceCreateRequest,
     UtteranceUpdateRequest,
 )
+from app.services.audio_store import audio_chunk_store
+from app.services.asr_pipeline import asr_pipeline_service
 from app.services.auth import get_current_user
 from app.services.catalog import SUPPORTED_LANGUAGE_CODES
 from app.services.guardrails import GuardrailService
 from app.services.session import SessionService
-from app.services.soap_generation import SoapGenerationService
+from app.services.soap_generation import soap_generation_service
 from app.services.soap_store import soap_store
 from app.services.transcript_store import transcript_store
-from app.services.translation import TranslationService
+from app.services.translation import translation_service
 
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -37,6 +43,41 @@ def _serialize_session(session) -> SessionStatusResponse:
         created_at=session.created_at.isoformat(),
         ended_at=session.ended_at.isoformat() if session.ended_at else None,
     )
+
+
+def _build_segment(
+    *,
+    session_id: str,
+    speaker: str,
+    source_text: str,
+    source_language: str,
+    translation_language: str,
+    source_mode: str,
+) -> TranscriptSegment:
+    guardrail = GuardrailService()
+    translated = translation_service.translate(
+        source_text=source_text.strip(),
+        source_language=source_language,
+        target_language=translation_language,
+    )
+    combined_reasons = translated.uncertainty_reasons + guardrail.assess_translation_risk(
+        source_text,
+        translated.translated_text,
+    )
+
+    segment = transcript_store.create_segment(
+        speaker=speaker,
+        source_text=source_text.strip(),
+        source_language=source_language,
+        translation_text=translated.translated_text,
+        translation_language=translation_language,
+        source_mode=source_mode,
+        edited_by_clinician=False,
+        is_uncertain=bool(combined_reasons),
+        uncertainty_reasons=combined_reasons,
+        translation_engine=translated.engine,
+    )
+    return transcript_store.add_segment(session_id, segment)
 
 
 @router.post("", response_model=SessionStatusResponse, status_code=status.HTTP_201_CREATED)
@@ -107,31 +148,120 @@ async def create_segment(
     if session.status != "ACTIVE":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session is not active")
 
-    translation_service = TranslationService()
     guardrail = GuardrailService()
-    result = translation_service.translate(
-        source_text=request.source_text.strip(),
-        source_language=request.source_language,
-        target_language=request.translation_language,
-    )
-    combined_reasons = result.uncertainty_reasons + guardrail.assess_translation_risk(
-        request.source_text,
-        result.translated_text,
-    )
+    for language_code in (request.source_language, request.translation_language):
+        try:
+            guardrail.validate_supported_language(language_code, SUPPORTED_LANGUAGE_CODES)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    segment = transcript_store.create_segment(
+    return _build_segment(
+        session_id=session_id,
         speaker=request.speaker,
-        source_text=request.source_text.strip(),
+        source_text=request.source_text,
         source_language=request.source_language,
-        translation_text=result.translated_text,
         translation_language=request.translation_language,
         source_mode=request.source_mode,
-        edited_by_clinician=False,
-        is_uncertain=bool(combined_reasons),
-        uncertainty_reasons=combined_reasons,
-        translation_engine=result.engine,
     )
-    return transcript_store.add_segment(session_id, segment)
+
+
+@router.post("/{session_id}/audio-chunks", response_model=AudioChunkResponse, status_code=status.HTTP_202_ACCEPTED)
+async def ingest_audio_chunk(
+    session_id: str,
+    request: AudioChunkRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = SessionService(db)
+    session = service.get_session(session_id)
+
+    if not session or session.clinician_id != current_user["sub"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session is not active")
+
+    audio_chunk_store.add_chunk(
+        session_id,
+        {
+            "chunk_id": request.chunk_id,
+            "sequence": request.sequence,
+            "started_at_ms": request.started_at_ms,
+            "ended_at_ms": request.ended_at_ms,
+            "duration_ms": request.duration_ms,
+            "overlap_ms": request.overlap_ms,
+            "sample_rate": request.sample_rate,
+            "payload_base64": request.payload_base64,
+        },
+    )
+
+    return AudioChunkResponse(chunk_id=request.chunk_id)
+
+
+@router.post(
+    "/{session_id}/audio-utterances/finalize",
+    response_model=AudioFinalizeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def finalize_audio_utterance(
+    session_id: str,
+    request: AudioFinalizeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = SessionService(db)
+    session = service.get_session(session_id)
+
+    if not session or session.clinician_id != current_user["sub"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session is not active")
+
+    guardrail = GuardrailService()
+    for language_code in (request.source_language, request.translation_language):
+        try:
+            guardrail.validate_supported_language(language_code, SUPPORTED_LANGUAGE_CODES)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    chunks = audio_chunk_store.drain_session(session_id)
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No buffered audio is available for transcription.",
+        )
+
+    transcription = asr_pipeline_service.transcribe_merged_chunks(chunks, request.source_language)
+    transcript_text = transcription.text.strip()
+    if transcription.engine == "asr_unavailable":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=" ".join(transcription.uncertainty_reasons) or "The ASR service is unavailable.",
+        )
+    if not transcript_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=" ".join(transcription.uncertainty_reasons) or "The audio could not be transcribed.",
+        )
+
+    segment = _build_segment(
+        session_id=session_id,
+        speaker=request.speaker,
+        source_text=transcript_text,
+        source_language=request.source_language,
+        translation_language=request.translation_language,
+        source_mode="speech",
+    )
+    segment.translation_engine = f"{transcription.engine} -> {segment.translation_engine}"
+
+    if transcription.uncertainty_reasons:
+        segment.is_uncertain = True
+        segment.uncertainty_reasons = transcription.uncertainty_reasons + segment.uncertainty_reasons
+
+    return AudioFinalizeResponse(
+        segment=segment,
+        transcript_text=transcript_text,
+        asr_engine=transcription.engine,
+    )
 
 
 @router.patch("/{session_id}/segments/{segment_id}", response_model=TranscriptSegment)
@@ -153,7 +283,6 @@ async def update_segment(
     if not existing_segment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
 
-    translation_service = TranslationService()
     guardrail = GuardrailService()
     result = translation_service.translate(
         source_text=request.source_text.strip(),
@@ -194,7 +323,8 @@ async def close_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already closed")
 
     segments = transcript_store.get_session_segments(session_id)
-    soap = SoapGenerationService().build(session_id=session_id, segments=segments)
+    soap = soap_generation_service.build(session_id=session_id, segments=segments)
+    soap = GuardrailService().validate_soap(soap)
     soap_store.set_soap(
         session_id,
         {
@@ -209,6 +339,7 @@ async def close_session(
     )
 
     closed_session = service.close_session(session_id)
+    audio_chunk_store.clear_session(session_id)
     transcript_store.clear_session(session_id)
     service.mark_transcript_purged(session_id)
 
@@ -240,6 +371,7 @@ async def delete_session(
     if not session or session.clinician_id != current_user["sub"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
+    audio_chunk_store.clear_session(session_id)
     transcript_store.clear_session(session_id)
     soap_store.clear_session(session_id)
     service.delete_session(session_id)

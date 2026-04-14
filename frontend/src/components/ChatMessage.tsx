@@ -36,7 +36,7 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
   return (
     <article className={`message-card ${cardTone}`}>
       <div className="message-topline">
-        <span className="speaker-chip">{segment.speaker === 'clinician' ? 'Clinician' : 'Patient'}</span>
+        <span className="speaker-chip">{segment.speaker === 'clinician' ? 'Clinico' : 'Doente'}</span>
         <span>{formatClock(segment.timestamp_ms)}</span>
       </div>
 
@@ -55,7 +55,7 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
         <div className="message-source">
           <div className="message-language-chip">{getLanguageChip(segment.source_language)}</div>
           <div className="message-copy">
-            <span className="message-label">Source</span>
+            <span className="message-label">Original</span>
             {isEditing ? (
               <textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} />
             ) : (
@@ -67,23 +67,23 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
         <div className="message-translation">
           <div className="message-language-chip">{getLanguageChip(segment.translation_language)}</div>
           <div className="message-copy">
-            <span className="message-label">Translation</span>
+            <span className="message-label">Traducao</span>
             <p className="translation-copy">{segment.translation_text}</p>
           </div>
           <button
             type="button"
             className="play-button"
             onClick={() => speakText(segment.translation_text, segment.translation_language)}
-            aria-label="Play translated text"
+            aria-label="Reproduzir traducao"
           >
-            Play
+            Ouvir
           </button>
         </div>
       </div>
 
       {segment.is_uncertain ? (
         <div className="message-alert">
-          <strong>Review required.</strong>
+          <strong>Revisao necessaria.</strong>
           <span>{segment.uncertainty_reasons.join(' ')}</span>
         </div>
       ) : null}
@@ -94,15 +94,15 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
           isEditing ? (
             <div className="button-row">
               <button type="button" className="button button--ghost" onClick={() => setIsEditing(false)}>
-                Cancel
+                Cancelar
               </button>
               <button type="button" className="button button--secondary" onClick={handleSave} disabled={isSaving || !draftText.trim()}>
-                {isSaving ? 'Saving...' : 'Save edit'}
+                {isSaving ? 'A guardar...' : 'Guardar'}
               </button>
             </div>
           ) : (
             <button type="button" className="link-button" onClick={() => setIsEditing(true)}>
-              Edit source
+              Editar original
             </button>
           )
         ) : null}

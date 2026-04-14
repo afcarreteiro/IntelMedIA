@@ -49,7 +49,7 @@ export function useSpeechRecognition() {
   const start = useCallback((language: string, onFinalTranscript: (text: string) => void) => {
     const ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!ctor) {
-      setError('Speech recognition is not available in this browser.');
+      setError('O reconhecimento de voz nao esta disponivel neste navegador.');
       return false;
     }
 
@@ -84,7 +84,7 @@ export function useSpeechRecognition() {
     };
 
     recognition.onerror = (event) => {
-      setError(event.error || 'Speech recognition failed.');
+      setError(event.error || 'O reconhecimento de voz falhou.');
       setIsListening(false);
     };
 

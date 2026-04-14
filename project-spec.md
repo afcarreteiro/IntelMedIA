@@ -1,0 +1,307 @@
+# IntelMedIA – MVP Product Specification (Portugal Launch)
+
+-----
+
+## 1. Product Objective
+
+IntelMedIA is a real-time, clinically safe translation system designed for medical consultations. Its purpose is to eliminate language barriers between clinicians and patients while preserving clinical accuracy, privacy, and workflow efficiency.
+
+**Core Goals**
+- Enable real-time bilingual communication in consultations
+- Achieve < 2.0s p95 end-to-end latency
+- Ensure strict GDPR compliance (zero persistent PHI storage)
+- Reduce clinician workload via automated SOAP summaries
+- Deliver deterministic, auditable translation outputs
+
+-----
+
+## 2. Core MVP Features
+
+### 2.1 Real-Time Translation
+
+- Bidirectional speech translation (doctor ↔ patient)
+- Manual speaker selection (no diarization in MVP)
+- Manual language pair selection
+- Streaming transcript with:
+	- draft (intermediate)
+	- final (stabilized)
+
+### 2.2 Transcript Interface
+- Live transcript rendering
+- Editable segments by clinician
+- Immutable segment IDs (UUID)
+- Version history per segment
+- Confidence indicators (optional UI layer)
+
+### 2.3 SOAP Summary
+
+- Generated after consultation
+- Structured output:
+	- Subjective
+	- Objective
+	- Assessment
+	- Plan
+- Fully editable
+- Export only (no backend persistence)
+
+### 2.4 Session Management
+
+- Create / monitor / close sessions
+- Explicit “Delete session now”
+- Automatic cleanup (TTL: 2–4 hours max)
+- Session lifecycle states:
+	- IDLE
+	- ACTIVE
+	- DEGRADED
+	- CLOSING
+	- CLOSED
+	- ERROR
+
+### 2.5 Observability (Non-PHI)
+
+- Latency metrics
+- Worker health
+- Session counts
+- Error rates
+
+-----
+
+## 3. AI Stack (Updated)
+
+### 3.1 ASR
+
+Model: Qwen3.5-ASR-1.7B
+Deployment: Local GPU
+Precision: float16
+Requirements:
+Batched inference
+Concurrency caps per GPU
+
+### 3.2 Translation
+
+Model: Qwen3.5-4B
+Mode:
+Deterministic (temperature = 0)
+Direct translation (no pivot)
+Deployment:
+Prefer local inference
+API fallback allowed (controlled)
+
+### 3.3 SOAP Generation
+
+Provider: Azure OpenAI (EU region)
+Input: Final transcript
+Output: Structured JSON
+
+------
+
+## 4. System Architecture
+
+### 4.1 Pipeline
+
+Client → Gateway → Redis Streams → Workers → Gateway → Client
+Flow
+Audio → ASR Worker
+ASR → MT Worker
+MT → Guardrail Layer
+Output → WebSocket stream
+Post-session → SOAP Worker
+
+### 4.2 Services
+
+Gateway API (FastAPI)
+Session Manager
+ASR Worker (GPU)
+MT Worker
+SOAP Worker
+Redis (streams + ephemeral store)
+Postgres (metadata only)
+
+------
+
+## 5. Data Handling & GDPR
+
+**PHI Rules**
+- No persistent storage
+- No PHI in logs
+- No PHI in metrics
+
+**Storage**
+Redis:
+- Encrypted (TLS)
+- Session-scoped namespaces
+- TTL enforced
+- Explicit deletion on session close
+
+Postgres:
+- Metadata only:
+	- session_id (hashed)
+	- timestamps
+	- status
+- No transcript content
+
+**Deletion Workflow**
+
+Session closed → immediate purge
+TTL fallback cleanup
+Crash recovery cleanup worker
+
+**Data Residency**
+All services in EU region
+Providers must support GDPR + DPA
+
+----
+
+## 6. Security Architecture
+
+### 6.1 Network Segmentation
+public_net:
+  - gateway
+  - reverse proxy
+
+internal_net:
+  - workers
+  - Redis
+  - Postgres
+
+No internal service exposed externally.
+
+### 6.2 Encryption
+
+TLS 1.3 (external)
+Redis TLS
+No plaintext traffic
+
+### 6.3 Authentication
+
+JWT access tokens (short-lived)
+Refresh token rotation
+RBAC:
+	clinician
+	admin
+
+### 6.4 Secrets
+
+Docker secrets / Key Vault
+No secrets in code or images
+Rotation required
+
+### 6.5 Worker Isolation
+
+Workers:
+	- No public access
+	- Restricted outbound access
+	- Allowed only:
+		- Redis
+		- Approved providers
+
+### 6.6 Threat Mitigation
+
+No PHI logging
+Rate limiting (edge + API)
+CSP + HSTS headers
+Session memory wipe on logout
+Disable caching of sensitive routes
+
+-----
+
+## 7. Performance Requirements
+
+Metric	Target:
+	End-to-end latency	< 2.0s p95
+	ASR latency	< 1.0s
+	Sessions per GPU	~10
+
+Strategies:
+	Batched ASR inference
+	Redis streaming pipeline
+	Backpressure control
+	Circuit breakers
+
+-----
+
+## 8. Reliability & Fault Handling
+Failure Modes
+Failure	Behavior
+ASR fails	degrade to text-only
+MT fails	show source language
+SOAP fails	retry + notify
+Mechanisms
+Per-stage timeouts
+Max 1 retry
+Dead letter queue
+Session state updates
+
+-----
+
+## 9. Observability
+
+Metrics:
+	ASR latency
+	MT latency
+	SOAP latency
+	Queue length
+	GPU usage
+Stack:
+	Prometheus
+	Grafana
+	OpenTelemetry
+
+----
+
+## 10. Deployment (MVP)
+
+**Orchestration**:
+- Docker Compose
+
+**Services**
+- Gateway
+- Session Manager
+- ASR Worker (GPU)
+- MT Worker
+- SOAP Worker
+- Redis
+- Postgres
+
+**Requirements**
+- GPU-enabled host
+- 16–32GB RAM recommended
+
+----
+
+## 11. Clinical Safety
+
+Critical constraints:
+
+Preserve negation (“no pain”, “denies”)
+Preserve dosage & numeric values
+Preserve uncertainty (“suspected”, “to confirm”)
+Avoid paraphrasing
+Allow clinician edits
+
+Accuracy > Fluency
+
+----
+
+## 12. Roadmap (Post-MVP)
+
+EHR integration
+Multi-language expansion
+Medical fine-tuning
+SaaS multi-tenant architecture
+On-prem hardened appliance
+
+### **Final Principle**:
+
+IntelMedIA is not a translation tool.
+
+It is a **clinical communication system.**
+
+All decisions must prioritize:
+
+Patient safety
+Data privacy
+Determinism
+Reliability
+
+Anything else is secondary.

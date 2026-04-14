@@ -1,149 +1,28 @@
-import re
-import unicodedata
 from dataclasses import dataclass
 
 from app.config import settings
+from app.services.hf_runtime import get_runtime_config
+
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    AutoModelForCausalLM = None
+    AutoTokenizer = None
 
 
-def _normalize_text(value: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", value.lower())
-    ascii_text = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return re.sub(r"[^a-z0-9\s]", "", ascii_text).strip()
-
-
-PHRASEBOOK = {
-    "where_is_the_pain": {
-        "pt-PT": "Onde e a dor?",
-        "en-GB": "Where is the pain?",
-        "fr-FR": "Ou est la douleur ?",
-        "es-ES": "Donde esta el dolor?",
-        "de-DE": "Wo ist der Schmerz?",
-        "it-IT": "Dove sente dolore?",
-        "uk-UA": "De bolyt?",
-        "ar": "Ayn al alam?",
-        "hi-IN": "Dard kahan hai?",
-        "bn-BD": "Byatha kothay?",
-        "ur-PK": "Dard kahan hai?",
-        "zh-CN": "Tong zai nali?",
-    },
-    "do_you_have_fever": {
-        "pt-PT": "Tem febre?",
-        "en-GB": "Do you have a fever?",
-        "fr-FR": "Avez-vous de la fievre ?",
-        "es-ES": "Tiene fiebre?",
-        "de-DE": "Haben Sie Fieber?",
-        "it-IT": "Ha febbre?",
-        "uk-UA": "U vas ye temperatura?",
-        "ar": "Hal ladaik humma?",
-        "hi-IN": "Kya aapko bukhar hai?",
-        "bn-BD": "Apnar jor ache?",
-        "ur-PK": "Kya aap ko bukhar hai?",
-        "zh-CN": "Ni fa shao ma?",
-    },
-    "i_have_chest_pain": {
-        "pt-PT": "Tenho dor no peito.",
-        "en-GB": "I have chest pain.",
-        "fr-FR": "J'ai une douleur thoracique.",
-        "es-ES": "Tengo dolor en el pecho.",
-        "de-DE": "Ich habe Brustschmerzen.",
-        "it-IT": "Ho dolore al petto.",
-        "uk-UA": "U mene bil u hrudiah.",
-        "ar": "Ladayya alam fi al sadr.",
-        "hi-IN": "Mujhe chhati me dard hai.",
-        "bn-BD": "Amar bukey byatha hocche.",
-        "ur-PK": "Mujhe seene mein dard hai.",
-        "zh-CN": "Wo xiong kou teng.",
-    },
-    "i_am_allergic_to_penicillin": {
-        "pt-PT": "Sou alergico a penicilina.",
-        "en-GB": "I am allergic to penicillin.",
-        "fr-FR": "Je suis allergique a la penicilline.",
-        "es-ES": "Soy alergico a la penicilina.",
-        "de-DE": "Ich bin allergisch gegen Penicillin.",
-        "it-IT": "Sono allergico alla penicillina.",
-        "uk-UA": "U mene alergiia na penitsylin.",
-        "ar": "Ana ladayya hasasiyya min al banisilin.",
-        "hi-IN": "Mujhe penicillin se allergy hai.",
-        "bn-BD": "Amar penicillin e allergy ache.",
-        "ur-PK": "Mujhe penicillin se allergy hai.",
-        "zh-CN": "Wo dui qing mei su guo min.",
-    },
-    "i_have_had_fever_since_yesterday": {
-        "pt-PT": "Tenho febre desde ontem.",
-        "en-GB": "I have had a fever since yesterday.",
-        "fr-FR": "J'ai de la fievre depuis hier.",
-        "es-ES": "Tengo fiebre desde ayer.",
-        "de-DE": "Ich habe seit gestern Fieber.",
-        "it-IT": "Ho febbre da ieri.",
-        "uk-UA": "U mene temperatura vid vchora.",
-        "ar": "Indi humma mundhu ams.",
-        "hi-IN": "Mujhe kal se bukhar hai.",
-        "bn-BD": "Amar kal theke jor ache.",
-        "ur-PK": "Mujhe kal se bukhar hai.",
-        "zh-CN": "Wo cong zuotian kaishi fa shao.",
-    },
-    "i_take_metformin": {
-        "pt-PT": "Tomo metformina.",
-        "en-GB": "I take metformin.",
-        "fr-FR": "Je prends de la metformine.",
-        "es-ES": "Tomo metformina.",
-        "de-DE": "Ich nehme Metformin.",
-        "it-IT": "Prendo metformina.",
-        "uk-UA": "Ia pryimaiu metformin.",
-        "ar": "Atanawal al metformin.",
-        "hi-IN": "Main metformin leta hun.",
-        "bn-BD": "Ami metformin khai.",
-        "ur-PK": "Main metformin leta hun.",
-        "zh-CN": "Wo chi er jia shuang gua.",
-    },
-    "i_feel_dizzy": {
-        "pt-PT": "Sinto tonturas.",
-        "en-GB": "I feel dizzy.",
-        "fr-FR": "Je me sens etourdi.",
-        "es-ES": "Me siento mareado.",
-        "de-DE": "Mir ist schwindelig.",
-        "it-IT": "Mi sento stordito.",
-        "uk-UA": "U mene zapamorochenia.",
-        "ar": "Ashur bil daukha.",
-        "hi-IN": "Mujhe chakkar aa rahe hain.",
-        "bn-BD": "Amar matha ghurchhe.",
-        "ur-PK": "Mujhe chakkar aa rahe hain.",
-        "zh-CN": "Wo tou yun.",
-    },
-    "i_will_check_your_blood_pressure": {
-        "pt-PT": "Vou medir a sua tensao arterial.",
-        "en-GB": "I will check your blood pressure.",
-        "fr-FR": "Je vais verifier votre tension arterielle.",
-        "es-ES": "Voy a medir su tension arterial.",
-        "de-DE": "Ich werde Ihren Blutdruck messen.",
-        "it-IT": "Misurero la sua pressione arteriosa.",
-        "uk-UA": "Ia vymiriayu vash arterialnyi tysk.",
-        "ar": "Sa aqis daght al dam ladayk.",
-        "hi-IN": "Main aapka blood pressure check karunga.",
-        "bn-BD": "Ami apnar roktochap mapbo.",
-        "ur-PK": "Main aap ka blood pressure check karunga.",
-        "zh-CN": "Wo yao gei ni liang xue ya.",
-    },
-    "how_long_has_this_been_happening": {
-        "pt-PT": "Ha quanto tempo isto acontece?",
-        "en-GB": "How long has this been happening?",
-        "fr-FR": "Depuis combien de temps cela dure ?",
-        "es-ES": "Cuanto tiempo lleva ocurriendo esto?",
-        "de-DE": "Wie lange passiert das schon?",
-        "it-IT": "Da quanto tempo succede?",
-        "uk-UA": "Skilky chasu tse tryvaie?",
-        "ar": "Mundhu mata hadha yahduth?",
-        "hi-IN": "Yeh kab se ho raha hai?",
-        "bn-BD": "Eta kotodin dhore hocche?",
-        "ur-PK": "Yeh kab se ho raha hai?",
-        "zh-CN": "Zhe yang you duo jiu le?",
-    },
-}
-
-NORMALIZED_PHRASE_INDEX = {
-    (language_code, _normalize_text(phrase)): phrase_key
-    for phrase_key, translations in PHRASEBOOK.items()
-    for language_code, phrase in translations.items()
+LANGUAGE_NAMES = {
+    "pt-PT": "Portuguese from Portugal",
+    "en-GB": "English",
+    "fr-FR": "French",
+    "es-ES": "Spanish",
+    "de-DE": "German",
+    "it-IT": "Italian",
+    "uk-UA": "Ukrainian",
+    "ar": "Arabic",
+    "hi-IN": "Hindi",
+    "bn-BD": "Bengali",
+    "ur-PK": "Urdu",
+    "zh-CN": "Simplified Chinese",
 }
 
 
@@ -159,6 +38,11 @@ class TranslationResult:
 
 
 class TranslationService:
+    def __init__(self):
+        self._tokenizer = None
+        self._model = None
+        self._load_error: str | None = None
+
     def translate(self, source_text: str, source_language: str, target_language: str) -> TranslationResult:
         if source_language == target_language:
             return TranslationResult(
@@ -167,19 +51,104 @@ class TranslationService:
                 uncertainty_reasons=[],
             )
 
-        phrase_key = NORMALIZED_PHRASE_INDEX.get((source_language, _normalize_text(source_text)))
-        if phrase_key and target_language in PHRASEBOOK[phrase_key]:
+        if not source_text.strip():
             return TranslationResult(
-                translated_text=PHRASEBOOK[phrase_key][target_language],
-                engine=f"{settings.translation_provider}_phrasebook",
-                uncertainty_reasons=[],
+                translated_text="",
+                engine="empty_input",
+                uncertainty_reasons=["Nao foi fornecido texto para traducao."],
             )
 
+        if not settings.use_huggingface_models:
+            return self._fallback_result(source_text, "O pipeline Hugging Face esta desativado.")
+
+        tokenizer, model = self._ensure_model()
+        if tokenizer is None or model is None:
+            return self._fallback_result(source_text, self._load_error or "O modelo MT nao esta disponivel.")
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are IntelMedIA's medical translation engine. "
+                    "Translate the clinician or patient utterance faithfully. "
+                    "Preserve negation, medication names, numbers, symptoms, and uncertainty. "
+                    "Return only the translation text with no explanations."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Source language: {LANGUAGE_NAMES.get(source_language, source_language)}\n"
+                    f"Target language: {LANGUAGE_NAMES.get(target_language, target_language)}\n"
+                    f"Utterance:\n{source_text.strip()}"
+                ),
+            },
+        ]
+
+        try:
+            prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+            inputs = tokenizer(prompt, return_tensors="pt")
+            if hasattr(model, "device") and str(model.device) != "cpu":
+                inputs = {name: tensor.to(model.device) for name, tensor in inputs.items()}
+
+            output = model.generate(
+                **inputs,
+                max_new_tokens=settings.mt_max_new_tokens,
+                do_sample=False,
+            )
+            prompt_length = inputs["input_ids"].shape[1]
+            generated_tokens = output[0][prompt_length:]
+            translated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+            if not translated_text:
+                return self._fallback_result(source_text, "O modelo MT nao devolveu traducao.")
+
+            return TranslationResult(
+                translated_text=translated_text,
+                engine=settings.mt_model_id,
+                uncertainty_reasons=[],
+            )
+        except Exception as exc:  # pragma: no cover - hardware/runtime dependent
+            return self._fallback_result(source_text, f"Falha na traducao MT: {exc}")
+
+    def _ensure_model(self):
+        if self._tokenizer is not None and self._model is not None:
+            return self._tokenizer, self._model
+        if AutoTokenizer is None or AutoModelForCausalLM is None:
+            self._load_error = "A dependencia transformers nao esta instalada."
+            return None, None
+
+        runtime = get_runtime_config()
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                settings.mt_model_id,
+                token=runtime.token,
+            )
+            self._model = AutoModelForCausalLM.from_pretrained(
+                settings.mt_model_id,
+                token=runtime.token,
+                device_map=runtime.device_map,
+                torch_dtype=runtime.torch_dtype,
+            )
+            self._load_error = None
+            return self._tokenizer, self._model
+        except Exception as exc:  # pragma: no cover - hardware/runtime dependent
+            self._load_error = str(exc)
+            return None, None
+
+    def _fallback_result(self, source_text: str, reason: str) -> TranslationResult:
         return TranslationResult(
             translated_text=source_text,
-            engine=f"{settings.translation_provider}_fallback",
+            engine="qwen_mt_fallback",
             uncertainty_reasons=[
-                "Local fallback mode could not confidently translate this free-form utterance.",
-                "Clinician review is required before relying on this output.",
+                reason,
+                "A traducao deve ser revista pelo clinico.",
             ],
         )
+
+
+translation_service = TranslationService()

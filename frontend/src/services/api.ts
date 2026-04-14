@@ -1,4 +1,7 @@
 import {
+  AudioChunkRequest,
+  AudioFinalizeRequest,
+  AudioFinalizeResponse,
   CatalogResponse,
   CloseSessionResponse,
   CreateSegmentRequest,
@@ -40,7 +43,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text());
+    const raw = await response.text();
+    let message = raw;
+
+    try {
+      const parsed = JSON.parse(raw) as { detail?: string };
+      if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+        message = parsed.detail;
+      }
+    } catch {
+      if (!raw.trim()) {
+        message = `HTTP ${response.status}`;
+      }
+    }
+
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {
@@ -83,6 +100,20 @@ export const api = {
 
   createSegment(sessionId: string, payload: CreateSegmentRequest) {
     return request<TranscriptSegment>(`/sessions/${sessionId}/segments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  uploadAudioChunk(sessionId: string, payload: AudioChunkRequest) {
+    return request<{ chunk_id: string; accepted: boolean; processing_mode: string }>(`/sessions/${sessionId}/audio-chunks`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  finalizeAudioUtterance(sessionId: string, payload: AudioFinalizeRequest) {
+    return request<AudioFinalizeResponse>(`/sessions/${sessionId}/audio-utterances/finalize`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });

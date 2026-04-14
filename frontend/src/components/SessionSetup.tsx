@@ -22,17 +22,14 @@ export function SessionSetup({
   return (
     <section className="setup-card">
       <div>
-        <div className="eyebrow">Start the MVP workflow</div>
-        <h2>Configure the consultation languages</h2>
-        <p>
-          The clinician keeps control on one shared device. IntelMedIA shows the translation larger than
-          the original wording so the patient can read it easily.
-        </p>
+        <div className="eyebrow">INICIAR CONSULTA</div>
+        <h2>Escolha os idiomas</h2>
+        <p>Configure apenas o essencial para comecar rapidamente.</p>
       </div>
 
       <div className="setup-grid">
         <label>
-          <span>Clinician language</span>
+          <span>Idioma do clinico</span>
           <select value={clinicianLanguage} onChange={(event) => onClinicianLanguageChange(event.target.value)}>
             {languages.map((language) => (
               <option key={language.code} value={language.code}>
@@ -43,7 +40,7 @@ export function SessionSetup({
         </label>
 
         <label>
-          <span>Patient language</span>
+          <span>Idioma do doente</span>
           <select value={patientLanguage} onChange={(event) => onPatientLanguageChange(event.target.value)}>
             {languages.map((language) => (
               <option key={language.code} value={language.code}>
@@ -54,14 +51,8 @@ export function SessionSetup({
         </label>
       </div>
 
-      <ul className="setup-points">
-        <li>Portugal-first configuration with GDPR-oriented handling.</li>
-        <li>Transcript content stays in volatile memory during the active session.</li>
-        <li>SOAP output is generated when the clinician closes the consultation.</li>
-      </ul>
-
       <button type="button" className="button button--primary" onClick={onStart} disabled={isBusy}>
-        {isBusy ? 'Starting...' : 'Start Consultation'}
+        {isBusy ? 'A iniciar...' : 'Comecar consulta'}
       </button>
     </section>
   );

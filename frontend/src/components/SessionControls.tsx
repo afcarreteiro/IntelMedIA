@@ -25,31 +25,28 @@ export function SessionControls({
 
   return (
     <section className="control-card">
-      <div>
-        <div className="eyebrow">Consultation session</div>
-        <h2>{languagePair}</h2>
-        <p>Shared-device mode for a clinician-led consultation on one computer.</p>
-      </div>
-
-      <div className="control-grid">
+      <div className="control-card__top">
         <div>
-          <span className="meta-label">Status</span>
-          <strong>{session.status}</strong>
+          <div className="eyebrow">CONSULTA</div>
+          <h2>{languagePair}</h2>
         </div>
-        <div>
-          <span className="meta-label">Retention</span>
-          <strong>volatile only</strong>
+
+        <div className="control-card__meta">
+          <div>
+            <span className="meta-label">Retencao</span>
+            <strong>Volatil</strong>
+          </div>
         </div>
       </div>
 
       <div className="button-row">
         {session.status === 'ACTIVE' ? (
           <button type="button" className="button button--primary" onClick={onCloseSession} disabled={!canClose || isClosing}>
-            {isClosing ? 'Generating SOAP...' : 'End Consultation'}
+            {isClosing ? 'A gerar SOAP...' : 'Encerrar consulta'}
           </button>
         ) : null}
         <button type="button" className="button button--ghost" onClick={onDeleteSession} disabled={isDeleting}>
-          {isDeleting ? 'Deleting...' : 'Delete Session Data'}
+          {isDeleting ? 'A apagar...' : 'Apagar dados da sessao'}
         </button>
       </div>
     </section>

@@ -59,6 +59,35 @@ class UtteranceUpdateRequest(BaseModel):
     source_text: str = Field(min_length=1, max_length=1200)
 
 
+class AudioChunkRequest(BaseModel):
+    chunk_id: str
+    sequence: int
+    started_at_ms: int
+    ended_at_ms: int
+    duration_ms: int
+    overlap_ms: int
+    sample_rate: int
+    payload_base64: str = Field(min_length=1)
+
+
+class AudioChunkResponse(BaseModel):
+    chunk_id: str
+    accepted: bool = True
+    processing_mode: str = "overlap_chunk_buffering"
+
+
+class AudioFinalizeRequest(BaseModel):
+    speaker: SpeakerRole
+    source_language: str
+    translation_language: str
+
+
+class AudioFinalizeResponse(BaseModel):
+    segment: TranscriptSegment
+    transcript_text: str
+    asr_engine: str
+
+
 class SoapResponse(BaseModel):
     session_id: str
     subjective: str

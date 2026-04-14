@@ -11,7 +11,9 @@ services:
       - INTELMEDIA_DATABASE_URL=sqlite:///./intelmedia.db
       - INTELMEDIA_JWT_SECRET=${INTELMEDIA_JWT_SECRET:-dev-secret-key-change-in-production}
       - INTELMEDIA_REGION=pt-PT
-      - INTELMEDIA_TRANSLATION_PROVIDER=demo
+      - INTELMEDIA_TRANSLATION_PROVIDER=huggingface_qwen
+      - INTELMEDIA_USE_HUGGINGFACE_MODELS=true
+      - HF_TOKEN=${HF_TOKEN}
     volumes:
       - backend_data:/app/data
     healthcheck:

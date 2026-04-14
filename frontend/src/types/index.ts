@@ -74,6 +74,29 @@ export interface CreateSegmentRequest {
   source_mode: SourceMode;
 }
 
+export interface AudioChunkRequest {
+  chunk_id: string;
+  sequence: number;
+  started_at_ms: number;
+  ended_at_ms: number;
+  duration_ms: number;
+  overlap_ms: number;
+  sample_rate: number;
+  payload_base64: string;
+}
+
+export interface AudioFinalizeRequest {
+  speaker: SpeakerRole;
+  source_language: string;
+  translation_language: string;
+}
+
+export interface AudioFinalizeResponse {
+  segment: TranscriptSegment;
+  transcript_text: string;
+  asr_engine: string;
+}
+
 export interface SoapSummary {
   session_id: string;
   subjective: string;
