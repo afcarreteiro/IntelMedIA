@@ -1,0 +1,1 @@
+"""IntelMedIA backend package."""
