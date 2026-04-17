@@ -7,12 +7,13 @@ import { VolumeMeter } from './VolumeMeter';
 interface ChatContainerProps {
   session: Session | null;
   segments: TranscriptSegment[];
+  liveSegment: TranscriptSegment | null;
   micLevel: number;
   micActive: boolean;
   onEditSegment: (segmentId: string, sourceText: string) => Promise<void>;
 }
 
-export function ChatContainer({ session, segments, micLevel, micActive, onEditSegment }: ChatContainerProps) {
+export function ChatContainer({ session, segments, liveSegment, micLevel, micActive, onEditSegment }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,15 +43,26 @@ export function ChatContainer({ session, segments, micLevel, micActive, onEditSe
         <VolumeMeter level={micLevel} active={micActive} />
       </div>
 
-      {segments.length === 0 ? (
+      {segments.length === 0 && !liveSegment ? (
         <div className="conversation-empty">
           <h2>A consulta esta pronta.</h2>
           <p>Use o microfone ou escreva a proxima frase para apresentar a traducao no ecra.</p>
         </div>
       ) : (
-        segments.map((segment) => (
-          <ChatMessage key={segment.segment_id} segment={segment} session={session} onEdit={onEditSegment} />
-        ))
+        <>
+          {segments.map((segment) => (
+            <ChatMessage key={segment.segment_id} segment={segment} session={session} onEdit={onEditSegment} />
+          ))}
+          {liveSegment ? (
+            <ChatMessage
+              key={liveSegment.segment_id}
+              segment={liveSegment}
+              session={session}
+              onEdit={onEditSegment}
+              live
+            />
+          ) : null}
+        </>
       )}
       <div ref={bottomRef} />
     </section>

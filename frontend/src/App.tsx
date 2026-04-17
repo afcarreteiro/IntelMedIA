@@ -13,6 +13,8 @@ import {
   Session,
   SoapSummary,
   SpeakerRole,
+  StreamLatencyMetrics,
+  StreamReadyEvent,
   TranscriptSegment,
   User,
 } from './types';
@@ -49,16 +51,46 @@ export default function App() {
   const [soapSummary, setSoapSummary] = useState<SoapSummary | null>(null);
   const [speaker, setSpeaker] = useState<SpeakerRole>('clinician');
   const [composerText, setComposerText] = useState('');
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [liveTranslation, setLiveTranslation] = useState('');
+  const [liveTranscriptEngine, setLiveTranscriptEngine] = useState('');
+  const [liveTranslationEngine, setLiveTranslationEngine] = useState('');
+  const [streamMetrics, setStreamMetrics] = useState<StreamLatencyMetrics>({});
+  const [streamWarning, setStreamWarning] = useState('');
+  const [streamReady, setStreamReady] = useState<StreamReadyEvent | null>(null);
   const [clinicianLanguage, setClinicianLanguage] = useState('pt-PT');
   const [patientLanguage, setPatientLanguage] = useState('en-GB');
 
   const audioCapture = useStreamingAudioCapture({
     sessionId: session?.session_id ?? null,
-    onChunk: async (chunk) => {
-      if (!session) {
-        return;
-      }
-      await api.uploadAudioChunk(session.session_id, chunk);
+    token: getToken(),
+    onSegmentFinal: (segment, metrics) => {
+      setSegments((current) => [...current, segment]);
+      setLiveTranscript('');
+      setLiveTranslation('');
+      setLiveTranscriptEngine('');
+      setLiveTranslationEngine('');
+      setStreamMetrics(metrics);
+      setComposerText('');
+    },
+    onTranscriptPartial: (text, engine, metrics) => {
+      setLiveTranscript(text);
+      setLiveTranscriptEngine(engine);
+      setStreamMetrics(metrics);
+    },
+    onTranslationPartial: (text, engine, metrics) => {
+      setLiveTranslation(text);
+      setLiveTranslationEngine(engine);
+      setStreamMetrics(metrics);
+    },
+    onWarning: (message) => {
+      setStreamWarning(message);
+    },
+    onMetrics: (metrics) => {
+      setStreamMetrics((current) => ({ ...current, ...metrics }));
+    },
+    onReady: (payload) => {
+      setStreamReady(payload);
     },
   });
 
@@ -96,6 +128,9 @@ export default function App() {
       setSession(null);
       setSegments([]);
       setSoapSummary(null);
+      setLiveTranscript('');
+      setLiveTranslation('');
+      setStreamReady(null);
       setAppError('Nao foi possivel carregar o posto IntelMedIA.');
     } finally {
       setBooting(false);
@@ -132,6 +167,9 @@ export default function App() {
     setSession(null);
     setSegments([]);
     setSoapSummary(null);
+    setLiveTranscript('');
+    setLiveTranslation('');
+    setStreamReady(null);
   }
 
   async function handleStartSession() {
@@ -150,6 +188,8 @@ export default function App() {
       setSegments([]);
       setSoapSummary(null);
       setSpeaker('clinician');
+      setStreamWarning('');
+      setStreamReady(null);
     } catch (error) {
       setAppError(getErrorMessage(error, 'Nao foi possivel iniciar a sessao.'));
     } finally {
@@ -200,7 +240,11 @@ export default function App() {
       return;
     }
 
-    const captureReady = await audioCapture.start();
+    const captureReady = await audioCapture.start({
+      speaker,
+      sourceLanguage: utteranceLanguages.sourceLanguage,
+      translationLanguage: utteranceLanguages.translationLanguage,
+    });
     if (!captureReady) {
       setAppError('Nao foi possivel iniciar a captura de voz.');
     }
@@ -218,20 +262,11 @@ export default function App() {
     setAppError('');
 
     try {
-      const uploadedChunks = await audioCapture.finish();
-      if (uploadedChunks === 0) {
+      const finalized = await audioCapture.finish();
+      if (!finalized) {
         setAppError('Nao foi captado audio suficiente para transcricao.');
         return false;
       }
-
-      const response = await api.finalizeAudioUtterance(session.session_id, {
-        speaker,
-        source_language: utteranceLanguages.sourceLanguage,
-        translation_language: utteranceLanguages.translationLanguage,
-      });
-
-      setSegments((current) => [...current, response.segment]);
-      setComposerText(response.transcript_text);
       return true;
     } catch (error) {
       setAppError(getErrorMessage(error, 'Nao foi possivel transcrever e traduzir o audio.'));
@@ -278,6 +313,9 @@ export default function App() {
       setSegments([]);
       setSoapSummary(null);
       setSpeaker('clinician');
+      setLiveTranscript('');
+      setLiveTranslation('');
+      setStreamReady(null);
     } catch (error) {
       setAppError(getErrorMessage(error, 'Nao foi possivel apagar os dados da sessao.'));
     } finally {
@@ -322,6 +360,27 @@ export default function App() {
   const translationLanguageLabel = utteranceLanguages
     ? getLanguageLabel(languages, utteranceLanguages.translationLanguage)
     : '';
+  const liveSegment = session && utteranceLanguages && (liveTranscript || liveTranslation)
+    ? {
+        segment_id: 'live-segment',
+        speaker,
+        timestamp_ms: Date.now(),
+        created_at: new Date().toISOString(),
+        source_text: liveTranscript || 'A processar audio...',
+        source_language: utteranceLanguages.sourceLanguage,
+        translation_text: liveTranslation || 'A traduzir em tempo real...',
+        translation_language: utteranceLanguages.translationLanguage,
+        source_mode: 'speech' as const,
+        edited_by_clinician: false,
+        is_uncertain: false,
+        uncertainty_reasons: [],
+        translation_engine: [liveTranscriptEngine, liveTranslationEngine].filter(Boolean).join(' -> ') || 'streaming',
+      }
+    : null;
+  const latencyLabel = [
+    streamMetrics.partial_asr_ms ? `ASR ${Math.round(streamMetrics.partial_asr_ms)}ms` : '',
+    streamMetrics.partial_mt_ms ? `MT ${Math.round(streamMetrics.partial_mt_ms)}ms` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
     <main className="app-shell">
@@ -329,6 +388,7 @@ export default function App() {
 
       {appError ? <div className="app-error">{appError}</div> : null}
       {audioCapture.error ? <div className="app-error">{audioCapture.error}</div> : null}
+      {streamWarning ? <div className="app-error">{streamWarning}</div> : null}
 
       <div className="workspace-grid">
         <section className="workspace-main">
@@ -349,6 +409,8 @@ export default function App() {
                 canClose={segments.length > 0}
                 isClosing={closingSession}
                 isDeleting={deletingSession}
+                streamStatus={streamReady}
+                latencyLabel={latencyLabel}
                 onCloseSession={handleCloseSession}
                 onDeleteSession={handleDeleteSession}
               />
@@ -356,6 +418,7 @@ export default function App() {
               <ChatContainer
                 session={session}
                 segments={segments}
+                liveSegment={liveSegment}
                 micLevel={audioCapture.level}
                 micActive={audioCapture.isCapturing}
                 onEditSegment={handleEditSegment}
@@ -365,7 +428,7 @@ export default function App() {
                 <Composer
                   speaker={speaker}
                   text={composerText}
-                  interimText={audioCapture.isCapturing ? 'Captacao de voz ativa.' : ''}
+                  interimText={audioCapture.isCapturing ? (liveTranscript || 'Captacao de voz ativa.') : ''}
                   sourceLanguageLabel={sourceLanguageLabel}
                   translationLanguageLabel={translationLanguageLabel}
                   speechSupported={audioCapture.isSupported}

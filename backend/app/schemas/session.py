@@ -88,6 +88,65 @@ class AudioFinalizeResponse(BaseModel):
     asr_engine: str
 
 
+class StreamAuthMessage(BaseModel):
+    type: Literal["auth"]
+    token: str
+    speaker: SpeakerRole
+    source_language: str
+    translation_language: str
+    sample_rate: int
+
+
+class StreamControlMessage(BaseModel):
+    type: Literal["stop"]
+
+
+class StreamLatencyMetrics(BaseModel):
+    capture_to_server_ms: float | None = None
+    partial_asr_ms: float | None = None
+    partial_mt_ms: float | None = None
+    endpoint_to_final_ms: float | None = None
+    final_turn_total_ms: float | None = None
+
+
+class StreamReadyEvent(BaseModel):
+    type: Literal["ready"] = "ready"
+    asr_engine: str
+    mt_engine: str
+    realtime_ready: bool
+
+
+class StreamWarningEvent(BaseModel):
+    type: Literal["warning"] = "warning"
+    message: str
+
+
+class StreamErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    message: str
+
+
+class StreamPartialEvent(BaseModel):
+    type: Literal["transcript_partial", "translation_partial"]
+    text: str
+    speaker: SpeakerRole
+    source_language: str
+    translation_language: str
+    engine: str
+    metrics: StreamLatencyMetrics = Field(default_factory=StreamLatencyMetrics)
+
+
+class StreamSegmentFinalEvent(BaseModel):
+    type: Literal["segment_final"] = "segment_final"
+    segment: TranscriptSegment
+    metrics: StreamLatencyMetrics = Field(default_factory=StreamLatencyMetrics)
+
+
+class StreamMetricsEvent(BaseModel):
+    type: Literal["metrics"] = "metrics"
+    metrics: StreamLatencyMetrics = Field(default_factory=StreamLatencyMetrics)
+
+
 class SoapResponse(BaseModel):
     session_id: str
     subjective: str

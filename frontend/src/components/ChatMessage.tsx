@@ -7,6 +7,7 @@ interface ChatMessageProps {
   segment: TranscriptSegment;
   session: Session;
   onEdit: (segmentId: string, sourceText: string) => Promise<void>;
+  live?: boolean;
 }
 
 function getLanguageChip(code: string) {
@@ -20,7 +21,7 @@ function speakText(text: string, language: string) {
   window.speechSynthesis.speak(utterance);
 }
 
-export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
+export function ChatMessage({ segment, session, onEdit, live = false }: ChatMessageProps) {
   const [draftText, setDraftText] = useState(segment.source_text);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,10 +35,10 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
   }
 
   return (
-    <article className={`message-card ${cardTone}`}>
+    <article className={`message-card ${cardTone} ${live ? 'message-card--live' : ''}`}>
       <div className="message-topline">
         <span className="speaker-chip">{segment.speaker === 'clinician' ? 'Clinico' : 'Doente'}</span>
-        <span>{formatClock(segment.timestamp_ms)}</span>
+        <span>{live ? 'Ao vivo' : formatClock(segment.timestamp_ms)}</span>
       </div>
 
       <div className="message-wave">
@@ -90,7 +91,7 @@ export function ChatMessage({ segment, session, onEdit }: ChatMessageProps) {
 
       <div className="message-footer">
         <span>{segment.translation_engine.replace('_', ' ')}</span>
-        {session.status === 'ACTIVE' ? (
+        {session.status === 'ACTIVE' && !live ? (
           isEditing ? (
             <div className="button-row">
               <button type="button" className="button button--ghost" onClick={() => setIsEditing(false)}>

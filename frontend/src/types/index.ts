@@ -112,3 +112,49 @@ export interface CloseSessionResponse {
   session: Session;
   soap: SoapSummary;
 }
+
+export interface StreamLatencyMetrics {
+  capture_to_server_ms?: number | null;
+  partial_asr_ms?: number | null;
+  partial_mt_ms?: number | null;
+  endpoint_to_final_ms?: number | null;
+  final_turn_total_ms?: number | null;
+}
+
+export interface StreamReadyEvent {
+  type: 'ready';
+  asr_engine: string;
+  mt_engine: string;
+  realtime_ready: boolean;
+}
+
+export interface StreamWarningEvent {
+  type: 'warning';
+  message: string;
+}
+
+export interface StreamErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+export interface StreamPartialEvent {
+  type: 'transcript_partial' | 'translation_partial';
+  text: string;
+  speaker: SpeakerRole;
+  source_language: string;
+  translation_language: string;
+  engine: string;
+  metrics: StreamLatencyMetrics;
+}
+
+export interface StreamSegmentFinalEvent {
+  type: 'segment_final';
+  segment: TranscriptSegment;
+  metrics: StreamLatencyMetrics;
+}
+
+export interface StreamMetricsEvent {
+  type: 'metrics';
+  metrics: StreamLatencyMetrics;
+}

@@ -154,3 +154,16 @@ export function getToken() {
 export function clearToken() {
   localStorage.removeItem('token');
 }
+
+export function getStreamingWebSocketUrl(sessionId: string) {
+  const explicitBase = import.meta.env.VITE_WS_BASE_URL as string | undefined;
+  if (explicitBase) {
+    return `${explicitBase.replace(/\/$/, '')}/ws/sessions/${sessionId}/stream`;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  const basePath = API_BASE ? API_BASE.replace(/^http(s?):\/\//, '').replace(/\/api$/, '') : host;
+  const normalizedHost = basePath.includes('/') ? host : basePath;
+  return `${protocol}//${normalizedHost}/ws/sessions/${sessionId}/stream`;
+}

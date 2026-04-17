@@ -21,7 +21,8 @@ except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
 class RuntimeConfig:
     token: str | None
     device_map: str
-    torch_dtype: object | None
+    dtype: object | None
+    device: str
 
 
 def get_runtime_config() -> RuntimeConfig:
@@ -29,11 +30,16 @@ def get_runtime_config() -> RuntimeConfig:
     return RuntimeConfig(
         token=token,
         device_map=settings.model_device_map,
-        torch_dtype=_resolve_torch_dtype(),
+        dtype=_resolve_dtype(),
+        device="cuda" if has_cuda_runtime() else "cpu",
     )
 
 
-def _resolve_torch_dtype():
+def has_cuda_runtime() -> bool:
+    return bool(torch is not None and torch.cuda.is_available())
+
+
+def _resolve_dtype():
     if torch is None:
         return None
 

@@ -42,7 +42,7 @@ export function Composer({
             type="button"
             className={speaker === 'clinician' ? 'is-active' : ''}
             onClick={() => onSpeakerChange('clinician')}
-            disabled={disabled}
+            disabled={disabled || isListening}
           >
             Clinico
           </button>
@@ -50,7 +50,7 @@ export function Composer({
             type="button"
             className={speaker === 'patient' ? 'is-active' : ''}
             onClick={() => onSpeakerChange('patient')}
-            disabled={disabled}
+            disabled={disabled || isListening}
           >
             Doente
           </button>

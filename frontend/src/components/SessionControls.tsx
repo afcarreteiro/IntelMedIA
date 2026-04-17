@@ -1,10 +1,12 @@
-import { Session } from '../types';
+import { Session, StreamReadyEvent } from '../types';
 
 interface SessionControlsProps {
   session: Session | null;
   canClose: boolean;
   isClosing: boolean;
   isDeleting: boolean;
+  streamStatus: StreamReadyEvent | null;
+  latencyLabel: string;
   onCloseSession: () => void;
   onDeleteSession: () => void;
 }
@@ -14,6 +16,8 @@ export function SessionControls({
   canClose,
   isClosing,
   isDeleting,
+  streamStatus,
+  latencyLabel,
   onCloseSession,
   onDeleteSession,
 }: SessionControlsProps) {
@@ -29,12 +33,22 @@ export function SessionControls({
         <div>
           <div className="eyebrow">CONSULTA</div>
           <h2>{languagePair}</h2>
+          {streamStatus ? (
+            <p>
+              {streamStatus.asr_engine} {'->'} {streamStatus.mt_engine}
+              {latencyLabel ? ` · ${latencyLabel}` : ''}
+            </p>
+          ) : null}
         </div>
 
         <div className="control-card__meta">
           <div>
             <span className="meta-label">Retencao</span>
             <strong>Volatil</strong>
+          </div>
+          <div>
+            <span className="meta-label">Tempo real</span>
+            <strong>{streamStatus?.realtime_ready ? 'Pronto' : 'Degradado'}</strong>
           </div>
         </div>
       </div>

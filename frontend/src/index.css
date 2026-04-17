@@ -400,6 +400,10 @@ button {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.message-card--live {
+  box-shadow: 0 0 0 2px rgba(47, 95, 255, 0.18), 0 16px 34px rgba(24, 45, 84, 0.12);
+}
+
 .card--patient .message-language-chip,
 .card--patient .speaker-chip {
   background: rgba(255, 255, 255, 0.16);
@@ -464,6 +468,12 @@ button {
   gap: 6px;
 }
 
+.message-translation {
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(241, 245, 255, 0.88);
+}
+
 .message-copy p {
   margin: 0;
 }
@@ -480,6 +490,7 @@ button {
   font-size: clamp(1.18rem, 1.05rem + 0.6vw, 1.62rem);
   font-weight: 700;
   line-height: 1.24;
+  color: #1e3568;
 }
 
 .message-source textarea,
@@ -505,11 +516,32 @@ button {
   background: rgba(255, 255, 255, 0.18);
 }
 
+.card--patient .message-translation {
+  background: rgba(9, 23, 74, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.card--patient .translation-copy {
+  color: rgba(255, 255, 255, 0.98);
+  text-shadow: 0 1px 0 rgba(5, 15, 56, 0.28);
+}
+
+.card--patient .message-translation .message-label,
+.card--patient .message-translation .message-copy p {
+  color: rgba(230, 238, 255, 0.9);
+}
+
 .message-alert {
   padding: 12px 14px;
   border-radius: 18px;
   background: rgba(255, 196, 88, 0.16);
   color: #8a5a00;
+}
+
+.card--patient .message-alert {
+  background: linear-gradient(180deg, rgba(255, 237, 202, 0.98), rgba(255, 226, 173, 0.94));
+  color: #6d4200;
+  border: 1px solid rgba(138, 90, 0, 0.12);
 }
 
 .composer {

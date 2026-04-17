@@ -44,23 +44,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
-        payload_segment, signature_segment = credentials.credentials.split(".", maxsplit=1)
-        payload_bytes = _decode(payload_segment)
-        provided_signature = _decode(signature_segment)
-        expected_signature = hmac.new(
-            settings.jwt_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256,
-        ).digest()
-
-        if not hmac.compare_digest(provided_signature, expected_signature):
-            raise ValueError("Invalid signature")
-
-        payload = json.loads(payload_bytes.decode("utf-8"))
-        if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError("Token expired")
-
-        return payload
+        return decode_access_token(credentials.credentials)
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -81,6 +65,26 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
 
 
 def get_current_user(payload: dict = Depends(verify_token)) -> dict:
+    return payload
+
+
+def decode_access_token(token: str) -> dict:
+    payload_segment, signature_segment = token.split(".", maxsplit=1)
+    payload_bytes = _decode(payload_segment)
+    provided_signature = _decode(signature_segment)
+    expected_signature = hmac.new(
+        settings.jwt_secret.encode("utf-8"),
+        payload_bytes,
+        hashlib.sha256,
+    ).digest()
+
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        raise ValueError("Invalid signature")
+
+    payload = json.loads(payload_bytes.decode("utf-8"))
+    if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
+        raise ValueError("Token expired")
+
     return payload
 
 

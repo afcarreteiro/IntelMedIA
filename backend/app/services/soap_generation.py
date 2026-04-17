@@ -6,6 +6,11 @@ from app.schemas.session import SoapResponse, TranscriptSegment
 from app.services.hf_runtime import get_runtime_config
 
 try:
+    import torch
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    torch = None
+
+try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
     AutoModelForCausalLM = None
@@ -17,6 +22,7 @@ class SoapGenerationService:
         self._tokenizer = None
         self._model = None
         self._load_error: str | None = None
+        self._device: str = "cpu"
 
     def build(self, session_id: str, segments: list[TranscriptSegment]) -> SoapResponse:
         if settings.use_huggingface_models:
@@ -61,8 +67,8 @@ class SoapGenerationService:
                 add_generation_prompt=True,
             )
             inputs = tokenizer(prompt, return_tensors="pt")
-            if hasattr(model, "device") and str(model.device) != "cpu":
-                inputs = {name: tensor.to(model.device) for name, tensor in inputs.items()}
+            if self._device != "cpu":
+                inputs = {name: tensor.to(self._device) for name, tensor in inputs.items()}
 
             output = model.generate(
                 **inputs,
@@ -107,9 +113,11 @@ class SoapGenerationService:
             self._model = AutoModelForCausalLM.from_pretrained(
                 settings.soap_model_id,
                 token=runtime.token,
-                device_map=runtime.device_map,
-                torch_dtype=runtime.torch_dtype,
+                dtype=runtime.dtype,
             )
+            self._device = runtime.device
+            if self._device != "cpu" and torch is not None:
+                self._model = self._model.to(self._device)
             self._load_error = None
             return self._tokenizer, self._model
         except Exception as exc:  # pragma: no cover - hardware/runtime dependent
