@@ -22,4 +22,4 @@ COPY asr_qwen3_ws.py /app/asr_qwen3_ws.py
 
 EXPOSE 8000
 
-CMD ["python3", "/app/asr_qwen3_ws.py"]
+ENTRYPOINT ["python3", "/app/asr_qwen3_ws.py"]
