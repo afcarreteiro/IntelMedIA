@@ -24,6 +24,21 @@ UNFIXED_TOKEN_NUM = int(os.getenv("ASR_UNFIXED_TOKEN_NUM", "5"))
 CHUNK_SIZE_SEC = float(os.getenv("ASR_STREAM_CHUNK_SIZE_SEC", "2.0"))
 TARGET_SAMPLE_RATE = 16000
 
+QWEN_LANGUAGE_HINTS = {
+    "pt-PT": "Portuguese",
+    "en-GB": "English",
+    "fr-FR": "French",
+    "es-ES": "Spanish",
+    "de-DE": "German",
+    "it-IT": "Italian",
+    "uk-UA": "Ukrainian",
+    "ar": "Arabic",
+    "hi-IN": "Hindi",
+    "bn-BD": "Bengali",
+    "ur-PK": "Urdu",
+    "zh-CN": "Chinese",
+}
+
 
 class StartMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -48,7 +63,7 @@ class SessionContext:
     session_id: str | None
     source_language: str | None
     partial: bool
-    streaming_state: object
+    buffered_samples: list[np.ndarray]
     last_text: str = ""
 
 
@@ -63,10 +78,10 @@ class QwenStreamingASR:
             return True, None
 
         try:
-            self._model = Qwen3ASRModel.LLM(
-                model=MODEL_ID,
-                gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+            self._model = Qwen3ASRModel.from_pretrained(
+                MODEL_ID,
                 max_new_tokens=MAX_NEW_TOKENS,
+                max_inference_batch_size=4,
             )
             self._load_error = None
             return True, None
@@ -74,37 +89,25 @@ class QwenStreamingASR:
             self._load_error = str(exc)
             return False, self._load_error
 
-    def create_state(self):
-        if self._model is None:
-            raise RuntimeError(self._load_error or "ASR model is not loaded.")
-
-        return self._model.init_streaming_state(
-            unfixed_chunk_num=UNFIXED_CHUNK_NUM,
-            unfixed_token_num=UNFIXED_TOKEN_NUM,
-            chunk_size_sec=CHUNK_SIZE_SEC,
-        )
-
-    async def transcribe_chunk(self, samples: np.ndarray, state) -> tuple[str, str | None]:
+    async def transcribe(self, samples: np.ndarray, language_hint: str | None = None) -> tuple[str, str | None]:
         if self._model is None:
             raise RuntimeError(self._load_error or "ASR model is not loaded.")
 
         async with self._lock:
-            await asyncio.to_thread(self._model.streaming_transcribe, samples, state)
+            results = await asyncio.to_thread(
+                self._model.transcribe,
+                audio=(samples, TARGET_SAMPLE_RATE),
+                language=language_hint,
+            )
 
-        text = getattr(state, "text", "") or ""
-        language = getattr(state, "language", None)
-        return text.strip(), language
-
-    async def finish(self, state) -> tuple[str, str | None]:
-        if self._model is None:
-            raise RuntimeError(self._load_error or "ASR model is not loaded.")
-
-        async with self._lock:
-            await asyncio.to_thread(self._model.finish_streaming_transcribe, state)
-
-        text = getattr(state, "text", "") or ""
-        language = getattr(state, "language", None)
-        return text.strip(), language
+        result = results[0]
+        if isinstance(result, dict):
+            text = (result.get("text", "") or "").strip()
+            language = result.get("language")
+        else:
+            text = (getattr(result, "text", "") or "").strip()
+            language = getattr(result, "language", None)
+        return text, language
 
     @property
     def is_ready(self) -> bool:
@@ -162,6 +165,12 @@ def _decode_wav_chunk(payload: bytes) -> tuple[np.ndarray, int]:
 async def _send_json(websocket: WebSocket, payload: dict) -> None:
     await websocket.send_json(payload)
 
+
+def _merge_buffered_samples(chunks: list[np.ndarray]) -> np.ndarray:
+    if not chunks:
+        return np.zeros((0,), dtype=np.float32)
+    return np.concatenate(chunks).astype(np.float32, copy=False)
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
@@ -212,7 +221,7 @@ async def transcribe_ws(websocket: WebSocket):
             session_id=start.session_id,
             source_language=start.source_language,
             partial=bool(start.partial),
-            streaming_state=asr_service.create_state(),
+            buffered_samples=[],
         )
 
         await _send_json(
@@ -244,8 +253,17 @@ async def transcribe_ws(websocket: WebSocket):
                     await _send_json(websocket, {"type": "warning", "message": "empty_chunk"})
                     continue
 
-                text, language = await asr_service.transcribe_chunk(samples, context.streaming_state)
-                if context.partial and text and text != context.last_text:
+                context.buffered_samples.append(samples)
+
+                if not context.partial:
+                    continue
+
+                merged_samples = _merge_buffered_samples(context.buffered_samples)
+                text, language = await asr_service.transcribe(
+                    merged_samples,
+                    language_hint=QWEN_LANGUAGE_HINTS.get(context.source_language),
+                )
+                if text and text != context.last_text:
                     context.last_text = text
                     await _send_json(
                         websocket,
@@ -265,7 +283,13 @@ async def transcribe_ws(websocket: WebSocket):
             control = ControlMessage.model_validate_json(message["text"])
 
             if control.type == "flush":
-                text, language = await asr_service.finish(context.streaming_state)
+                merged_samples = _merge_buffered_samples(context.buffered_samples)
+                text, language = ("", None)
+                if merged_samples.size > 0:
+                    text, language = await asr_service.transcribe(
+                        merged_samples,
+                        language_hint=QWEN_LANGUAGE_HINTS.get(context.source_language),
+                    )
                 if text:
                     context.last_text = text
                     await _send_json(
@@ -278,11 +302,18 @@ async def transcribe_ws(websocket: WebSocket):
                             "is_final": True,
                         },
                     )
-                context.streaming_state = asr_service.create_state()
+                context.buffered_samples = []
+                context.last_text = ""
                 continue
 
             if control.type == "stop":
-                text, language = await asr_service.finish(context.streaming_state)
+                merged_samples = _merge_buffered_samples(context.buffered_samples)
+                text, language = ("", None)
+                if merged_samples.size > 0:
+                    text, language = await asr_service.transcribe(
+                        merged_samples,
+                        language_hint=QWEN_LANGUAGE_HINTS.get(context.source_language),
+                    )
                 if text:
                     await _send_json(
                         websocket,

@@ -1,4 +1,4 @@
-FROM vllm/vllm-openai:latest
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /app
 
@@ -14,12 +14,11 @@ ENV ASR_UNFIXED_TOKEN_NUM=5
 ENV ASR_STREAM_CHUNK_SIZE_SEC=2.0
 
 COPY requirements.txt /app/requirements.txt
-RUN python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir --ignore-installed blinker \
-    && python3 -m pip install --no-cache-dir -r /app/requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir -r /app/requirements.txt
 
 COPY asr_qwen3_ws.py /app/asr_qwen3_ws.py
 
 EXPOSE 8000
 
-ENTRYPOINT ["python3", "/app/asr_qwen3_ws.py"]
+ENTRYPOINT ["python", "/app/asr_qwen3_ws.py"]
